@@ -1,36 +1,39 @@
-import { Router, type Request, type Response } from 'express';
+import { Router, Request, Response } from 'express';
 import { generateInitialScenario, advanceTurn } from '../services/mockLlm';
-import type { ChatRequest, ChatResponse } from '../types/api';
+import { generateInitialScenarioBedrock, advanceTurnBedrock } from '../services/bedrockLlm';
+import type { ChatRequest } from '../types/api';
 
 const router = Router();
 
-router.post('/', (req: Request<{}, {}, ChatRequest>, res: Response<ChatResponse>) => {
+router.post('/', async (req: Request, res: Response) => {
     try {
-        const { state, input, isInitial, theme, pcName } = req.body;
+        const payload = req.body as ChatRequest;
+        const useBedrock = process.env.USE_BEDROCK === 'true';
 
-        if (!state) {
-            return res.status(400).json({ error: 'GameState is required' });
-        }
+        if (payload.isInitial) {
+            // 新規シナリオ生成
+            const name = payload.pcName || payload.state.pc.profile.name || '探索者';
+            const scenarioTheme = payload.theme || payload.state.session.theme || '';
+            const resp = useBedrock
+                ? await generateInitialScenarioBedrock(name, scenarioTheme)
+                : generateInitialScenario(name, scenarioTheme);
 
-        if (isInitial) {
-            // First turn: generate scenario
-            const name = pcName || state.pc.profile.name || '探索者';
-            const scenarioTheme = theme || state.session.theme || '';
-            const scenario = generateInitialScenario(name, scenarioTheme);
-
-            return res.json({ initialScenario: scenario });
+            res.json({ initialScenario: resp });
         } else {
-            // Subsequent turns
-            if (!input) {
-                return res.status(400).json({ error: 'Input is required for subsequent turns' });
+            // 通常ターン進行
+            if (!payload.input) {
+                res.status(400).json({ error: 'input is required for advance turn' });
+                return;
             }
+            const resp = useBedrock
+                ? await advanceTurnBedrock(payload.state, payload.input)
+                : advanceTurn(payload.state, payload.input);
 
-            const response = advanceTurn(state, input);
-            return res.json({ llmResponse: response });
+            res.json({ llmResponse: resp });
         }
     } catch (error) {
-        console.error('Error in chat API:', error);
-        return res.status(500).json({ error: 'Internal server error' });
+        console.error('API Error:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 
