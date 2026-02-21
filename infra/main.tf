@@ -125,7 +125,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-# Placeholder policy for Bedrock (Phase D)
+# Policy for Bedrock (Phase D)
 resource "aws_iam_role_policy" "bedrock_invoke" {
   name   = "${var.project_name}-bedrock-invoke-policy"
   role   = aws_iam_role.lambda_exec.id
@@ -135,7 +135,7 @@ resource "aws_iam_role_policy" "bedrock_invoke" {
       {
         Effect   = "Allow"
         Action   = ["bedrock:InvokeModel"]
-        Resource = "*" # Restrict this in Phase D
+        Resource = "arn:aws:bedrock:${var.aws_region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0"
       }
     ]
   })
