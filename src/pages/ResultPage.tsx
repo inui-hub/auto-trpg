@@ -5,7 +5,7 @@
 import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../contexts/GameContext';
-import { generateResult } from '../services/stubLlm';
+import { generateResult } from '../services/api';
 
 export default function ResultPage() {
     const navigate = useNavigate();
@@ -42,7 +42,7 @@ export default function ResultPage() {
                     <section className="result-section">
                         <h2>獲得</h2>
                         <ul>
-                            {result.gains.map((g, i) => (
+                            {result.gains.map((g: string, i: number) => (
                                 <li key={i}>✅ {g}</li>
                             ))}
                         </ul>
@@ -53,7 +53,7 @@ export default function ResultPage() {
                     <section className="result-section">
                         <h2>喪失</h2>
                         <ul>
-                            {result.losses.map((l, i) => (
+                            {result.losses.map((l: string, i: number) => (
                                 <li key={i}>❌ {l}</li>
                             ))}
                         </ul>
@@ -71,7 +71,7 @@ export default function ResultPage() {
                         <div className="final-flags">
                             <h3>重要フラグ</h3>
                             <div className="flags-list">
-                                {result.finalFlags.map((f, i) => (
+                                {result.finalFlags.map((f: string, i: number) => (
                                     <span key={i} className="flag-tag">{f}</span>
                                 ))}
                             </div>

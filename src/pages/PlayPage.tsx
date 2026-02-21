@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGame } from '../contexts/GameContext';
-import { generateInitialScenario, advanceTurn } from '../services/stubLlm';
+import { generateInitialScenario, advanceTurn } from '../services/api';
 import { performCheck } from '../services/mechanics';
 import { SUCCESS_LEVEL_LABELS, DIFFICULTY_LABELS } from '../types/mechanics';
 import type { CheckRequest, CheckResult, LLMResponse } from '../types/game';
@@ -34,28 +34,40 @@ export default function PlayPage() {
         if (state.log.messages.length > 0) return; // Already has messages
         initialized.current = true;
 
-        const scenario = generateInitialScenario(state.pc.profile.name, state.session.theme);
+        const initScenario = async () => {
+            try {
+                setLoading(true);
+                const scenario = await generateInitialScenario(state.pc.profile.name, state.session.theme, state);
 
-        // Update state with scenario data
-        setState({
-            ...state,
-            session: {
-                ...state.session,
-                outline: scenario.outline,
-                guidance: scenario.guidance,
-            },
-            world: {
-                ...state.world,
-                objective: scenario.objective,
-                flags: scenario.initialFlags,
-            },
-            pc: {
-                ...state.pc,
-                inventory: [...state.pc.inventory, ...scenario.initialInventory],
-            },
-        });
+                // Update state with scenario data
+                setState({
+                    ...state,
+                    session: {
+                        ...state.session,
+                        outline: scenario.outline,
+                        guidance: scenario.guidance,
+                    },
+                    world: {
+                        ...state.world,
+                        objective: scenario.objective,
+                        flags: scenario.initialFlags,
+                    },
+                    pc: {
+                        ...state.pc,
+                        inventory: [...state.pc.inventory, ...scenario.initialInventory],
+                    },
+                });
 
-        addLogMessage({ type: 'gm', text: scenario.introductionText });
+                addLogMessage({ type: 'gm', text: scenario.introductionText });
+            } catch (error) {
+                console.error('Failed to generate initial scenario:', error);
+                addLogMessage({ type: 'system', text: 'シナリオ生成に失敗しました。再読み込みしてください。' });
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        initScenario();
     }, [state, setState, addLogMessage]);
 
     // Auto-scroll
@@ -114,12 +126,17 @@ export default function PlayPage() {
         setChoices([]);
         setLoading(true);
 
-        // Simulate async LLM call
-        setTimeout(() => {
-            const response = advanceTurn(state, text.trim());
-            processResponse(response);
-            setLoading(false);
-        }, 800);
+        advanceTurn(state, text.trim())
+            .then(response => {
+                processResponse(response);
+            })
+            .catch(err => {
+                console.error('Turn error:', err);
+                addLogMessage({ type: 'system', text: '通信エラーが発生しました。' });
+            })
+            .finally(() => {
+                setLoading(false);
+            });
     }, [state, loading, addLogMessage, processResponse]);
 
     // Handle choice click
@@ -142,14 +159,19 @@ export default function PlayPage() {
             text: `🎲 判定: ${result.skill}（目標値 ${result.targetValue}）→ 出目 ${result.roll} → ${SUCCESS_LEVEL_LABELS[result.successLevel]}`,
         });
 
-        // Send result to LLM (stub)
-        setLoading(true);
-        setTimeout(() => {
-            const response = advanceTurn(state, `[判定結果] ${result.skill}: ${SUCCESS_LEVEL_LABELS[result.successLevel]}`);
-            processResponse(response);
-            setLoading(false);
-            setLastCheckResult(null);
-        }, 800);
+        advanceTurn(state, `[判定結果] ${result.skill}: ${SUCCESS_LEVEL_LABELS[result.successLevel]}`)
+            .then(response => {
+                processResponse(response);
+                setLastCheckResult(null);
+            })
+            .catch(err => {
+                console.error('Roll error:', err);
+                addLogMessage({ type: 'system', text: '通信エラーが発生しました。' });
+                setLastCheckResult(null); // Just clear it on error for now
+            })
+            .finally(() => {
+                setLoading(false);
+            });
     };
 
     // Keyboard handling
